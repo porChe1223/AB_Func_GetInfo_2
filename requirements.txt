@@ -1,5 +1,19 @@
-# DO NOT include azure-functions-worker in this file
-# The Python Worker is managed by Azure Functions platform
-# Manually managing azure-functions-worker may cause unexpected issues
-
-azure-functions
+azure-functions==1.21.3
+cachetools==5.5.0
+certifi==2024.8.30
+charset-normalizer==3.4.0
+google-analytics-data==0.18.15
+google-api-core==2.24.0
+google-auth==2.36.0
+googleapis-common-protos==1.66.0
+grpcio==1.68.1
+grpcio-status==1.68.1
+idna==3.10
+proto-plus==1.25.0
+protobuf==5.29.1
+pyasn1==0.6.1
+pyasn1_modules==0.4.1
+python-dotenv==1.0.1
+requests==2.32.3
+rsa==4.9
+urllib3==2.2.3
