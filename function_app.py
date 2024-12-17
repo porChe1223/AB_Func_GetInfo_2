@@ -60,7 +60,7 @@ def format_response_as_json(response):
 # エンドポイント
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-@app.route(route="main", auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="get", auth_level=func.AuthLevel.ANONYMOUS)
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('GAのレポート取得情報')
 
