@@ -60,8 +60,8 @@ def format_response_as_json(response):
 # エンドポイント
 app = func.FunctionApp()
 
-@app.function_name(name="HttpTrigger1")
-@app.route(route="get", auth_level=func.AuthLevel.ANONYMOUS)
+@app.function_name(name="InputGA4Info")
+@app.route(route="detail", auth_level=func.AuthLevel.ANONYMOUS)
 @app.queue_output(arg_name="msg", queue_name="outqueue", connection="AzureWebJobsStorage")
 @app.cosmos_db_output(arg_name="outputDocument", database_name="my-database", container_name="my-container", connection="CosmosDbConnectionSetting")
 def main(req: func.HttpRequest,
