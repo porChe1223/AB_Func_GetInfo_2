@@ -11,7 +11,7 @@
 
 ## デプロイ
 
-- https://ga4info.azurewebsites.net/main
+- https://inputga4info.azurewebsites.net/detail
 
 # 注意
 
