@@ -10,6 +10,7 @@ from google.analytics.data_v1beta.types import RunReportRequest, DateRange, Dime
 ###########################
 # GA4からのレポート情報取得 #
 ###########################
+
 # .envファイルをロード
 load_dotenv()
 
@@ -27,53 +28,108 @@ KEY_FILE_LOCATION = "ga4account.json"
 # GA4のプロパティID
 PROPERTY_ID = "469101596"
 
-def get_ga4_report():
-    # クライアントの初期化
-    client = BetaAnalyticsDataClient.from_service_account_file(KEY_FILE_LOCATION)
+########################
+# ここから下編集したコード #
+########################
 
-    # レポートリクエストの設定
-    request = RunReportRequest(
-        property=f"properties/{PROPERTY_ID}",
-        date_ranges=[DateRange(start_date="2023-01-01", end_date="today")],
-        dimensions=[Dimension(name="pagePath"), Dimension(name="pageTitle")],
-        metrics=[Metric(name="screenPageViews")],
-        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="screenPageViews"), desc=True)],
-        limit=10,
-    )
 
-    # レポートの取得
-    return client.run_report(request)
+def get_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=None, limit=100000):
+    """
+    Google Analytics 4 のレポートを取得する関数。
+
+    :start_date: レポートの開始日 (例: "2023-01-01")
+    :end_date: レポートの終了日 (例: "today")
+    :dimensions: 取得したいディメンションのリスト (例: ["pagePath", "pageTitle"])
+    :metrics: 取得したいメトリクスのリスト (例: ["screenPageViews"])
+    :order_by_metric: 並び替えに使用するメトリクス名 (例: "screenPageViews")
+    :limit: 結果の制限数 (デフォルト: 100000)
+    :return: レポート結果
+    """
+
+    try:
+        # クライアントの初期化
+        client = BetaAnalyticsDataClient.from_service_account_file(KEY_FILE_LOCATION)
+
+        # ディメンションとメトリクスをオブジェクト化
+        dimension_objects = [Dimension(name=dim) for dim in dimensions]
+        metric_objects = [Metric(name=metric) for metric in metrics]
+
+        # 並び替えの設定
+        order_by = None
+        if order_by_metric:
+            order_by = [OrderBy(metric=OrderBy.MetricOrderBy(metric_name=order_by_metric), desc=True)]
+        
+        # レポートリクエストの設定
+        request = RunReportRequest(
+            property=f"properties/{PROPERTY_ID}",
+            date_ranges=[DateRange(start_date=start_date, end_date=end_date)],
+            dimensions=dimension_objects,
+            metrics=metric_objects,
+            order_bys=order_by,
+            limit=limit,
+        )
+        # レポートの取得
+        response = client.run_report(request)
+        return response
+    except Exception as e:
+        logging.error(f'GA4レポート取得中にエラーが発生しました: {e}')
+        raise
+
 
 
 ############################
 # レポート情報をJSON型に変換 #
 ############################
-def format_response_as_json(response):
-    result = []
-    for row in response.rows:
-        data = {
-            "dimensions": {dim_name: dim_value.value for dim_name, dim_value in zip(["pagePath", "pageTitle"], row.dimension_values)},
-            "metrics": {metric_name: metric_value.value for metric_name, metric_value in zip(["screenPageViews"], row.metric_values)}
-        }
-        result.append(data)
-    return json.dumps(result, indent=4, ensure_ascii=False)
 
+def format_response_as_json(response):
+    """
+    レポート結果をJSON形式に整形
+
+    :response: レポート結果
+    :return: JSON形式の文字列
+    """
+    try:
+        result = []
+        for row in response.rows:
+            data = {
+                "dimensions": {dim_name: dim_value.value for dim_name, dim_value in zip([dim.name for dim in response.dimension_headers], row.dimension_values)},
+                "metrics": {metric_name: metric_value.value for metric_name, metric_value in zip([metric.name for metric in response.metric_headers], row.metric_values)}
+            }
+            result.append(data)
+        return json.dumps(result, indent=4, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f'JSON形式への変換中にエラーが発生しました: {e}')
+        raise
 
 ##############################
 # レポート情報をCOSMOSDBに格納 #
 ##############################
-app = func.FunctionApp()
 
+# app = func.FunctionApp()
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS) # ここの引数
 @app.function_name(name="InputGA4Info")
 @app.route(route="detail", auth_level=func.AuthLevel.ANONYMOUS)
 @app.queue_output(arg_name="msg", queue_name="outqueue", connection="AzureWebJobsStorage")
 @app.cosmos_db_output(arg_name="outputDocument", database_name="my-database", container_name="my-container", connection="CosmosDbConnectionSetting")
 
 def main(req: func.HttpRequest, msg: func.Out[func.QueueMessage], outputDocument: func.Out[func.Document]) -> func.HttpResponse:
+    logging.info('GAのレポート取得情報')
 
     try:
+        
+        #### google analyticsのデータを取得するパラメータを大量にぶち込む ####
+        
+        start_date = "2023-01-01"
+        end_date = "today"
+        dimensions = ["pagePath", "pageTitle", "city", "country", "browser", "operatingSystem", "deviceCategory"]
+        metrics = ["screenPageViews", "sessions", "totalUsers", "newUsers", "bounceRate", "averageSessionDuration"]
+        order_by_metric = "screenPageViews"
+        limit = 100000
+
         # GA4からのレポート情報取得
-        response = get_ga4_report()
+        response = get_ga4_report(start_date, end_date, dimensions, metrics,  order_by_metric, limit)  # ここの引数
+        # response = get_ga4_report()
+
         # レポート情報をJSON型に変換
         results = format_response_as_json(response)
 
@@ -90,3 +146,7 @@ def main(req: func.HttpRequest, msg: func.Out[func.QueueMessage], outputDocument
     except Exception as e:
         logging.error(f'エラーが発生しました: {e}')
         return func.HttpResponse(f'エラーが発生しました: {e}', status_code=500)
+
+######################
+# ここまで編集したコード #
+######################
