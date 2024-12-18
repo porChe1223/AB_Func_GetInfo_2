@@ -28,24 +28,7 @@ KEY_FILE_LOCATION = "ga4account.json"
 # GA4のプロパティID
 PROPERTY_ID = "469101596"
 
-########################
-# ここから下編集したコード #
-########################
-
-
 def get_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=None, limit=100000):
-    """
-    Google Analytics 4 のレポートを取得する関数。
-
-    :start_date: レポートの開始日 (例: "2023-01-01")
-    :end_date: レポートの終了日 (例: "today")
-    :dimensions: 取得したいディメンションのリスト (例: ["pagePath", "pageTitle"])
-    :metrics: 取得したいメトリクスのリスト (例: ["screenPageViews"])
-    :order_by_metric: 並び替えに使用するメトリクス名 (例: "screenPageViews")
-    :limit: 結果の制限数 (デフォルト: 100000)
-    :return: レポート結果
-    """
-
     try:
         # クライアントの初期化
         client = BetaAnalyticsDataClient.from_service_account_file(KEY_FILE_LOCATION)
@@ -69,8 +52,8 @@ def get_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=No
             limit=limit,
         )
         # レポートの取得
-        response = client.run_report(request)
-        return response
+        return client.run_report(request)
+    
     except Exception as e:
         logging.error(f'GA4レポート取得中にエラーが発生しました: {e}')
         raise
@@ -82,12 +65,6 @@ def get_ga4_report(start_date, end_date, dimensions, metrics, order_by_metric=No
 ############################
 
 def format_response_as_json(response):
-    """
-    レポート結果をJSON形式に整形
-
-    :response: レポート結果
-    :return: JSON形式の文字列
-    """
     try:
         result = []
         for row in response.rows:
@@ -97,16 +74,18 @@ def format_response_as_json(response):
             }
             result.append(data)
         return json.dumps(result, indent=4, ensure_ascii=False)
+    
     except Exception as e:
         logging.error(f'JSON形式への変換中にエラーが発生しました: {e}')
         raise
+
+
 
 ##############################
 # レポート情報をCOSMOSDBに格納 #
 ##############################
 
-# app = func.FunctionApp()
-app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS) # ここの引数
+app = func.FunctionApp()
 @app.function_name(name="InputGA4Info")
 @app.route(route="detail", auth_level=func.AuthLevel.ANONYMOUS)
 @app.queue_output(arg_name="msg", queue_name="outqueue", connection="AzureWebJobsStorage")
@@ -116,19 +95,16 @@ def main(req: func.HttpRequest, msg: func.Out[func.QueueMessage], outputDocument
     logging.info('GAのレポート取得情報')
 
     try:
-        
-        #### google analyticsのデータを取得するパラメータを大量にぶち込む ####
-        
-        start_date = "2023-01-01"
-        end_date = "today"
-        dimensions = ["pagePath", "pageTitle", "city", "country", "browser", "operatingSystem", "deviceCategory"]
-        metrics = ["screenPageViews", "sessions", "totalUsers", "newUsers", "bounceRate", "averageSessionDuration"]
-        order_by_metric = "screenPageViews"
-        limit = 100000
+        # GA4で取得するパラメータを指定
+        start_date = "2023-01-01"                                                                                    # レポートの開始日
+        end_date = "today"                                                                                           # レポートの終了日
+        dimensions = ["pagePath", "pageTitle", "city", "country", "browser", "operatingSystem", "deviceCategory"]    # 取得したいディメンションのリスト
+        metrics = ["screenPageViews", "sessions", "totalUsers", "newUsers", "bounceRate", "averageSessionDuration"]  # 取得したいメトリクスのリスト
+        order_by_metric = "screenPageViews"                                                                          # 並び替えに使用するメトリクス名
+        limit = 100000                                                                                               # 結果の制限数
 
         # GA4からのレポート情報取得
-        response = get_ga4_report(start_date, end_date, dimensions, metrics,  order_by_metric, limit)  # ここの引数
-        # response = get_ga4_report()
+        response = get_ga4_report(start_date, end_date, dimensions, metrics,  order_by_metric, limit)
 
         # レポート情報をJSON型に変換
         results = format_response_as_json(response)
@@ -137,16 +113,9 @@ def main(req: func.HttpRequest, msg: func.Out[func.QueueMessage], outputDocument
         outputDocument.set(func.Document.from_dict({"id": "report", "data": results}))
         msg.set("Report processed")
 
-        # デバッグ用ログ
-        logging.info(f"Results: {results}")
-
         # JSONレスポンスを返す
         return func.HttpResponse(results, status_code=200)
     
     except Exception as e:
         logging.error(f'エラーが発生しました: {e}')
         return func.HttpResponse(f'エラーが発生しました: {e}', status_code=500)
-
-######################
-# ここまで編集したコード #
-######################
