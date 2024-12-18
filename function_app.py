@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import RunReportRequest, DateRange, Dimension, Metric, OrderBy
 
+
+###########################
+# GA4からのレポート情報取得 #
+###########################
 # .envファイルをロード
 load_dotenv()
 
@@ -23,9 +27,6 @@ KEY_FILE_LOCATION = "ga4account.json"
 # GA4のプロパティID
 PROPERTY_ID = "469101596"
 
-###########################
-# GA4からのレポート情報取得 #
-###########################
 def get_ga4_report():
     # クライアントの初期化
     client = BetaAnalyticsDataClient.from_service_account_file(KEY_FILE_LOCATION)
@@ -57,18 +58,18 @@ def format_response_as_json(response):
         result.append(data)
     return json.dumps(result, indent=4, ensure_ascii=False)
 
-# エンドポイント
+
+##############################
+# レポート情報をCOSMOSDBに格納 #
+##############################
 app = func.FunctionApp()
 
 @app.function_name(name="InputGA4Info")
 @app.route(route="detail", auth_level=func.AuthLevel.ANONYMOUS)
 @app.queue_output(arg_name="msg", queue_name="outqueue", connection="AzureWebJobsStorage")
 @app.cosmos_db_output(arg_name="outputDocument", database_name="my-database", container_name="my-container", connection="CosmosDbConnectionSetting")
-def main(req: func.HttpRequest,
-         msg: func.Out[func.QueueMessage],
-         outputDocument: func.Out[func.Document]) -> func.HttpResponse:
-    logging.info('Python HTTP trigger function processed a request.')
-    logging.info('Python Cosmos DB trigger function processed a request.')
+
+def main(req: func.HttpRequest, msg: func.Out[func.QueueMessage], outputDocument: func.Out[func.Document]) -> func.HttpResponse:
 
     try:
         # GA4からのレポート情報取得
@@ -85,6 +86,7 @@ def main(req: func.HttpRequest,
 
         # JSONレスポンスを返す
         return func.HttpResponse(results, status_code=200)
+    
     except Exception as e:
         logging.error(f'エラーが発生しました: {e}')
         return func.HttpResponse(f'エラーが発生しました: {e}', status_code=500)
